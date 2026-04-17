@@ -64,7 +64,11 @@ export default function PDV() {
       .select()
       .single();
 
-    if (!error && data) {
+    // Se der erro, joga na tela!
+    if (error) {
+      console.error("Erro ao criar mesa:", error);
+      alert("Erro ao criar mesa no banco: " + error.message);
+    } else if (data) {
       setComandas([{ ...data, itens_comanda: [] }, ...comandas]);
     }
   };
