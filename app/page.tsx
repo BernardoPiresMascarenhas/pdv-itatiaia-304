@@ -9,6 +9,9 @@ export default function PDV() {
   const [erroLogin, setErroLogin] = useState("");
 
 
+  const [carrinhoMobileAberto, setCarrinhoMobileAberto] = useState(false); // <-- ADICIONE ESTA LINHA AQUI
+
+
   const [produtos, setProdutos] = useState<any[]>([]);
   const [comandas, setComandas] = useState<any[]>([]);
   const [comandaAbertaId, setComandaAbertaId] = useState<number | null>(null);
@@ -115,6 +118,7 @@ export default function PDV() {
     setFormaPagamento("Pendente");
     setCategoriaSelecionada("Todas");
     setBuscaProduto("");
+    setCarrinhoMobileAberto(false); // <-- ADICIONE ESTA LINHA AQUI
   };
 
   const fecharComandaTela = () => {
@@ -307,91 +311,162 @@ export default function PDV() {
     <div className="flex h-screen bg-slate-50 font-sans text-slate-800 print:bg-white print:h-auto print:block">
       
       {/* LADO ESQUERDO: PAINEL DE CARDÁPIO */}
-      <div className="w-2/3 p-8 flex flex-col h-full overflow-hidden print:hidden">
+      <div className="w-full lg:w-2/3 p-4 lg:p-8 flex flex-col h-full overflow-hidden print:hidden">
         
-        <div className="flex items-center gap-6 mb-6 bg-white p-6 rounded-3xl shadow-sm border border-slate-100 shrink-0">
+        {/* CABEÇALHO */}
+        <div className="flex items-center gap-4 lg:gap-6 mb-4 lg:mb-6 bg-white p-4 lg:p-6 rounded-3xl shadow-sm border border-slate-100 shrink-0">
           <button 
             onClick={fecharComandaTela} 
-            className="flex items-center justify-center w-12 h-12 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-full font-bold text-xl transition-colors"
-            title="Voltar ao Painel"
+            className="flex items-center justify-center w-12 h-12 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-full font-bold text-xl transition-colors shrink-0"
           >
             ←
           </button>
-          <div>
-            <p className="text-sm font-bold text-amber-500 uppercase tracking-widest mb-1">Adicionando itens à</p>
-            <h1 className="text-3xl font-black text-slate-900 tracking-tight uppercase">{comandaAtual?.nome}</h1>
+          <div className="overflow-hidden">
+            <p className="text-xs lg:text-sm font-bold text-amber-500 uppercase tracking-widest mb-0.5">Adicionando itens à</p>
+            <h1 className="text-2xl lg:text-3xl font-black text-slate-900 tracking-tight uppercase truncate">{comandaAtual?.nome}</h1>
           </div>
         </div>
-        
-        <div className="relative mb-4 shrink-0">
-          <span className="absolute left-4 top-4 text-slate-400 text-xl">🔍</span>
-          <input
-            type="text"
-            placeholder="Pesquisar produto no cardápio..."
-            className="w-full bg-white border border-slate-200 text-slate-800 placeholder-slate-400 pl-12 pr-4 py-4 rounded-2xl shadow-sm focus:ring-4 focus:ring-amber-500/20 focus:border-amber-500 outline-none transition-all text-lg font-medium"
-            value={buscaProduto}
-            onChange={(e) => setBuscaProduto(e.target.value)}
-          />
+
+        {/* ABAS MOBILE (Ocultas no PC) */}
+        <div className="flex lg:hidden bg-slate-200 p-1.5 rounded-xl mb-4 shrink-0">
+          <button
+            onClick={() => setCarrinhoMobileAberto(false)}
+            className={`flex-1 py-2.5 rounded-lg font-black text-sm transition-all ${!carrinhoMobileAberto ? 'bg-white shadow-sm text-slate-800' : 'text-slate-500 hover:bg-slate-300'}`}
+          >
+            📖 CARDÁPIO
+          </button>
+          <button
+            onClick={() => setCarrinhoMobileAberto(true)}
+            className={`flex-1 py-2.5 rounded-lg font-black text-sm transition-all flex justify-center items-center gap-2 ${carrinhoMobileAberto ? 'bg-white shadow-sm text-amber-600' : 'text-slate-500 hover:bg-slate-300'}`}
+          >
+            🧾 COMANDA
+            <span className={`${carrinhoMobileAberto ? 'bg-amber-100' : 'bg-slate-300 text-slate-600'} px-2 py-0.5 rounded-md text-xs`}>
+              {comandaAtual?.itens_comanda?.length || 0}
+            </span>
+          </button>
         </div>
 
-        <div className="flex gap-3 overflow-x-auto pb-4 mb-2 shrink-0 scrollbar-hide">
-          {categoriasUnicas.map(categoria => (
-            <button
-              key={categoria}
-              onClick={() => setCategoriaSelecionada(categoria)}
-              className={`px-5 py-2.5 rounded-full font-bold text-sm whitespace-nowrap transition-all shadow-sm border ${
-                categoriaSelecionada === categoria 
-                ? "bg-slate-800 text-amber-400 border-slate-800" 
-                : "bg-white text-slate-500 border-slate-200 hover:bg-slate-100 hover:text-slate-800"
-              }`}
-            >
-              {categoria}
-            </button>
-          ))}
-        </div>
-        
-        <div className="overflow-y-auto pr-2 pb-10 flex-grow">
-          {Object.keys(produtosAgrupados).length === 0 ? (
-            <p className="text-center text-slate-400 mt-10 font-medium">Nenhum produto encontrado.</p>
-          ) : (
-            Object.entries(produtosAgrupados).map(([categoria, itens]: any) => (
-              <div key={categoria} className="mb-12">
-                <div className="flex items-center gap-4 mb-6">
-                  <h2 className="text-lg font-black uppercase text-slate-500 tracking-widest shrink-0">
-                    {categoria}
-                  </h2>
-                  <div className="h-px bg-slate-200 w-full"></div>
-                </div>
+        {/* ÁREA 1: CARDÁPIO (Sempre visível no PC. No mobile, só visível se a aba Cardápio estiver ativa) */}
+        <div className={`flex-col flex-grow overflow-hidden ${!carrinhoMobileAberto ? 'flex' : 'hidden lg:flex'}`}>
+          <div className="relative mb-4 shrink-0">
+            <span className="absolute left-4 top-4 text-slate-400 text-xl">🔍</span>
+            <input
+              type="text"
+              placeholder="Pesquisar produto no cardápio..."
+              className="w-full bg-white border border-slate-200 text-slate-800 placeholder-slate-400 pl-12 pr-4 py-4 rounded-2xl shadow-sm focus:ring-4 focus:ring-amber-500/20 focus:border-amber-500 outline-none transition-all text-lg font-medium"
+              value={buscaProduto}
+              onChange={(e) => setBuscaProduto(e.target.value)}
+            />
+          </div>
 
-                <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-                  {itens.map((produto: any) => (
-                    <div key={produto.id} className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 hover:border-amber-400 hover:shadow-md flex justify-between items-center transition-all group h-28">
-                      <div className="flex flex-col justify-center h-full pr-3 w-full">
-                        <h3 className="font-bold text-slate-700 leading-tight text-sm group-hover:text-slate-900 transition-colors line-clamp-2">
-                          {produto.nome}
-                        </h3>
-                        <p className="text-emerald-600 font-black mt-1">
-                          R$ {Number(produto.preco).toFixed(2)}
-                        </p>
+          <div className="flex gap-3 overflow-x-auto pb-4 mb-2 shrink-0 scrollbar-hide">
+            {categoriasUnicas.map(categoria => (
+              <button
+                key={categoria}
+                onClick={() => setCategoriaSelecionada(categoria)}
+                className={`px-5 py-2.5 rounded-full font-bold text-sm whitespace-nowrap transition-all shadow-sm border ${
+                  categoriaSelecionada === categoria 
+                  ? "bg-slate-800 text-amber-400 border-slate-800" 
+                  : "bg-white text-slate-500 border-slate-200 hover:bg-slate-100 hover:text-slate-800"
+                }`}
+              >
+                {categoria}
+              </button>
+            ))}
+          </div>
+          
+          <div className="overflow-y-auto pr-2 pb-10 flex-grow">
+            {Object.keys(produtosAgrupados).length === 0 ? (
+              <p className="text-center text-slate-400 mt-10 font-medium">Nenhum produto encontrado.</p>
+            ) : (
+              Object.entries(produtosAgrupados).map(([categoria, itens]: any) => (
+                <div key={categoria} className="mb-12">
+                  <div className="flex items-center gap-4 mb-6">
+                    <h2 className="text-lg font-black uppercase text-slate-500 tracking-widest shrink-0">
+                      {categoria}
+                    </h2>
+                    <div className="h-px bg-slate-200 w-full"></div>
+                  </div>
+
+                  <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+                    {itens.map((produto: any) => (
+                      <div key={produto.id} className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 hover:border-amber-400 hover:shadow-md flex justify-between items-center transition-all group h-28">
+                        <div className="flex flex-col justify-center h-full pr-3 w-full">
+                          <h3 className="font-bold text-slate-700 leading-tight text-sm group-hover:text-slate-900 transition-colors line-clamp-2">
+                            {produto.nome}
+                          </h3>
+                          <p className="text-emerald-600 font-black mt-1">
+                            R$ {Number(produto.preco).toFixed(2)}
+                          </p>
+                        </div>
+                        <button 
+                          onClick={() => adicionarProduto(produto)}
+                          className="bg-slate-100 text-slate-400 group-hover:bg-slate-900 group-hover:text-amber-500 w-12 h-12 shrink-0 rounded-full flex items-center justify-center text-2xl font-black shadow-sm active:scale-90 transition-all"
+                        >
+                          +
+                        </button>
                       </div>
-                      <button 
-                        onClick={() => adicionarProduto(produto)}
-                        className="bg-slate-100 text-slate-400 group-hover:bg-slate-900 group-hover:text-amber-500 w-12 h-12 shrink-0 rounded-full flex items-center justify-center text-2xl font-black shadow-sm active:scale-90 transition-all"
-                        title="Adicionar à comanda"
-                      >
-                        +
-                      </button>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
+              ))
+            )}
+          </div>
+        </div>
+
+        {/* ÁREA 2: CARRINHO DO GARÇOM (Invisível no PC. No mobile, só aparece se a aba Comanda estiver ativa) */}
+        <div className={`flex-col flex-grow overflow-y-auto bg-white rounded-2xl p-4 shadow-sm border border-slate-100 ${carrinhoMobileAberto ? 'flex' : 'hidden'} lg:hidden`}>
+          <h3 className="font-black text-lg mb-4 text-slate-700 border-b-2 border-dashed border-slate-200 pb-3 uppercase tracking-widest">Resumo do Pedido</h3>
+
+          {itensCupomAgrupados?.length === 0 ? (
+            <div className="text-center py-10 my-auto">
+              <p className="text-5xl mb-4">📝</p>
+              <p className="text-slate-500 font-bold mb-1">Comanda vazia</p>
+              <p className="text-slate-400 text-sm mb-6">Nenhum produto foi adicionado.</p>
+              <button 
+                onClick={() => setCarrinhoMobileAberto(false)}
+                className="text-amber-600 font-black uppercase tracking-widest text-sm bg-amber-50 hover:bg-amber-100 px-6 py-3 rounded-xl transition-colors"
+              >
+                Voltar ao Cardápio
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-3 pb-6">
+              {itensCupomAgrupados?.map((item: any) => (
+                <div key={item.produto_id} className="flex justify-between items-center bg-slate-50 p-3 rounded-xl border border-slate-100">
+                  <div className="flex items-center gap-3 overflow-hidden">
+                    <span className="bg-slate-800 text-amber-500 w-10 h-10 flex items-center justify-center rounded-xl font-black text-lg shrink-0">
+                      {item.quantidade}x
+                    </span>
+                    <div className="overflow-hidden">
+                      <p className="font-bold text-slate-800 leading-tight text-sm truncate">{item.nome}</p>
+                      <p className="text-emerald-600 font-black text-sm mt-0.5">R$ {item.valor_total.toFixed(2)}</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => removerItem(item.ids_banco[item.ids_banco.length - 1])}
+                    className="w-12 h-12 shrink-0 flex items-center justify-center bg-red-50 text-red-500 rounded-xl font-bold hover:bg-red-500 hover:text-white transition-colors active:scale-90 ml-2"
+                  >
+                    🗑️
+                  </button>
+                </div>
+              ))}
+
+              <div className="mt-6 border-t-2 border-dashed border-slate-200 pt-6">
+                <p className="text-slate-400 text-xs uppercase font-black text-right mb-1 tracking-widest">Total da Mesa</p>
+                <p className="text-4xl font-black text-slate-900 text-right tracking-tighter">
+                  <span className="text-xl text-slate-400 font-medium mr-1">R$</span>
+                  {comandaAtual ? calcularTotal(comandaAtual.itens_comanda).toFixed(2) : "0.00"}
+                </p>
               </div>
-            ))
+            </div>
           )}
         </div>
+
       </div>
 
       {/* LADO DIREITO: O CUPOM E CAIXA */}
-      <div className="w-1/3 bg-slate-100 border-l border-slate-200 flex flex-col shadow-2xl z-10 print:w-full print:border-none print:shadow-none print:bg-white h-full relative">
+      <div className="hidden lg:flex lg:w-1/3 bg-slate-100 border-l border-slate-200 flex-col shadow-2xl z-10 print:flex print:w-full print:border-none print:shadow-none print:bg-white h-full relative">
         
         <div className="absolute inset-0 bg-slate-800 print:hidden h-40"></div>
 
