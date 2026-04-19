@@ -390,9 +390,9 @@ export default function PDV() {
 
                   <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
                     {itens.map((produto: any) => (
-                      <div key={produto.id} className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 hover:border-amber-400 hover:shadow-md flex justify-between items-center transition-all group h-28">
-                        <div className="flex flex-col justify-center h-full pr-3 w-full">
-                          <h3 className="font-bold text-slate-700 leading-tight text-sm group-hover:text-slate-900 transition-colors line-clamp-2">
+                      <div key={produto.id} className="bg-white p-4 lg:p-5 rounded-2xl shadow-sm border border-slate-100 hover:border-amber-400 hover:shadow-md flex justify-between items-center transition-all group min-h-[7rem]">
+                        <div className="flex flex-col justify-center h-full pr-2 w-full">
+                          <h3 className="font-bold text-slate-700 leading-tight text-sm group-hover:text-slate-900 transition-colors">
                             {produto.nome}
                           </h3>
                           <p className="text-emerald-600 font-black mt-1">
@@ -434,12 +434,12 @@ export default function PDV() {
             <div className="space-y-3 pb-6">
               {itensCupomAgrupados?.map((item: any) => (
                 <div key={item.produto_id} className="flex justify-between items-center bg-slate-50 p-3 rounded-xl border border-slate-100">
-                  <div className="flex items-center gap-3 overflow-hidden">
+                  <div className="flex items-center gap-3 flex-1 pr-2">
                     <span className="bg-slate-800 text-amber-500 w-10 h-10 flex items-center justify-center rounded-xl font-black text-lg shrink-0">
                       {item.quantidade}x
                     </span>
-                    <div className="overflow-hidden">
-                      <p className="font-bold text-slate-800 leading-tight text-sm truncate">{item.nome}</p>
+                    <div className="flex-1">
+                      <p className="font-bold text-slate-800 leading-tight text-sm break-words">{item.nome}</p>
                       <p className="text-emerald-600 font-black text-sm mt-0.5">R$ {item.valor_total.toFixed(2)}</p>
                     </div>
                   </div>
