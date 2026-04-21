@@ -35,7 +35,6 @@ export default function PDV() {
     const { data: dbComandas } = await supabase
       .from('comandas')
       .select('*, itens_comanda(*, produtos(*))')
-      .eq('status', 'aberta')
       .order('created_at', { ascending: false });
     
     if (dbComandas) setComandas(dbComandas);
@@ -81,6 +80,16 @@ export default function PDV() {
     
     await supabase.from('comandas').delete().eq('id', id);
     setComandas(comandas.filter((c) => c.id !== id));
+  };
+
+  const fecharComandaBanco = async (id: number) => {
+    const { error } = await supabase.from('comandas').update({ status: 'fechada' }).eq('id', id);
+    if (!error) carregarDados(); // Recarrega a lista
+  };
+
+  const reabrirComandaBanco = async (id: number) => {
+    const { error } = await supabase.from('comandas').update({ status: 'aberta' }).eq('id', id);
+    if (!error) carregarDados(); // Recarrega a lista
   };
 
   const adicionarProduto = async (produto: any) => {
@@ -243,7 +252,8 @@ export default function PDV() {
           </div>
         </header>
 
-        <div className="mb-8 relative max-w-xl mx-auto md:mx-0">
+        {/* BARRA DE PESQUISA */}
+        <div className="mb-12 relative max-w-xl mx-auto md:mx-0">
           <span className="absolute left-4 top-4 text-slate-400 text-xl">🔍</span>
           <input
             type="text"
@@ -254,54 +264,153 @@ export default function PDV() {
           />
         </div>
 
-        {comandas.length === 0 ? (
-          <div className="text-center py-20">
-            <p className="text-6xl mb-4">🍺</p>
-            <p className="text-slate-500 text-2xl font-medium">Nenhuma mesa aberta no momento.</p>
-            <p className="text-slate-400">Clique em "Nova Mesa" para começar a vender!</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-            {comandasFiltradas.map((comanda) => (
-              <div key={comanda.id} className="bg-white p-6 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] transition-all border border-slate-100 relative group flex flex-col justify-between min-h-[220px] overflow-hidden">
-                <div className="absolute top-0 left-0 w-full h-2 bg-slate-800"></div>
-                <div>
-                  <div className="flex justify-between items-start mb-2 mt-2">
-                    <h2 className="text-2xl font-black text-slate-800 uppercase tracking-tight truncate pr-2">
-                      {comanda.nome}
-                    </h2>
-                    <span className="bg-slate-100 text-slate-500 text-xs font-bold px-3 py-1.5 rounded-full flex-shrink-0">
-                      {comanda.itens_comanda?.length || 0} itens
-                    </span>
+        {/* ========================================= */}
+        {/* SESSÃO 1: COMANDAS ABERTAS                */}
+        {/* ========================================= */}
+        <div className="mb-16">
+          <h2 className="text-xl font-black text-slate-700 mb-6 uppercase tracking-widest flex items-center gap-3">
+            <span className="w-3.5 h-3.5 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_10px_rgba(16,185,129,0.5)]"></span>
+            Mesas Abertas
+          </h2>
+          
+          {comandasFiltradas.filter(c => c.status === 'aberta').length === 0 ? (
+            <div className="text-center py-16 bg-white border border-dashed border-slate-300 rounded-3xl">
+              <p className="text-5xl mb-4">🍻</p>
+              <p className="text-slate-500 text-xl font-medium">Nenhuma mesa aberta.</p>
+              <p className="text-slate-400 text-sm mt-1">Clique em "Nova Mesa" para começar a vender!</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+              {comandasFiltradas.filter(c => c.status === 'aberta').map((comanda) => (
+                <div key={comanda.id} className="bg-white p-5 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] transition-all border border-slate-100 relative group flex flex-col justify-between min-h-[340px] overflow-hidden">
+                  <div className="absolute top-0 left-0 w-full h-2 bg-emerald-500"></div>
+                  
+                  <div className="flex flex-col h-full">
+                    <div className="flex justify-between items-start mb-2 mt-2 shrink-0">
+                      <h2 className="text-2xl font-black text-slate-800 uppercase tracking-tight truncate pr-2">
+                        {comanda.nome}
+                      </h2>
+                      <span className="bg-slate-100 text-slate-500 text-xs font-bold px-3 py-1.5 rounded-full flex-shrink-0">
+                        {comanda.itens_comanda?.length || 0} itens
+                      </span>
+                    </div>
+
+                    {/* MINI LISTA DE ITENS (ESPIADINHA) */}
+                    <div className="flex-grow my-3 bg-slate-50/70 rounded-xl p-3 overflow-y-auto h-32 border border-slate-100 scrollbar-thin scrollbar-thumb-slate-200">
+                      {comanda.itens_comanda?.length === 0 ? (
+                        <p className="text-xs text-slate-400 text-center italic mt-10">Nenhum pedido ainda</p>
+                      ) : (
+                        <div className="space-y-2">
+                          {comanda.itens_comanda?.map((item: any, idx: number) => (
+                            <div key={idx} className="flex justify-between items-center text-xs border-b border-dashed border-slate-200 pb-1.5 last:border-0 last:pb-0">
+                              <span className="text-slate-600 font-medium truncate pr-2">{item.produtos?.nome}</span>
+                              <span className="text-emerald-600 font-black whitespace-nowrap">R$ {Number(item.produtos?.preco || 0).toFixed(2)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    
+                    <div className="mt-2 shrink-0">
+                      <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Total da Conta</p>
+                      <p className="text-3xl font-black text-slate-900 tracking-tighter">
+                        <span className="text-lg text-slate-400 font-medium mr-1 border-r-2 border-emerald-500 pr-1">R$</span>
+                        {calcularTotal(comanda.itens_comanda).toFixed(2)}
+                      </p>
+                    </div>
                   </div>
                   
-                  <div className="mt-6">
-                    <p className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-1">Total da Conta</p>
-                    <p className="text-4xl font-black text-slate-900 tracking-tighter">
-                      <span className="text-xl text-slate-400 font-medium mr-1 border-r-2 border-amber-500 pr-1">R$</span>
-                      {calcularTotal(comanda.itens_comanda).toFixed(2)}
-                    </p>
+                  <div className="flex gap-2 mt-5 shrink-0">
+                    <button 
+                      onClick={() => abrirComanda(comanda.id)} 
+                      className="flex-1 bg-slate-900 text-amber-500 py-3 rounded-xl font-black uppercase tracking-wider hover:bg-slate-800 transition-colors shadow-md text-xs sm:text-sm"
+                    >
+                      Abrir Mesa
+                    </button>
+                    <button 
+                      onClick={() => fecharComandaBanco(comanda.id)} 
+                      className="w-12 bg-slate-100 text-slate-600 py-3 rounded-xl font-bold hover:bg-slate-200 transition-colors flex items-center justify-center text-lg" 
+                      title="Encerrar Conta"
+                    >
+                      🔒
+                    </button>
+                    <button 
+                      onClick={() => deletarComanda(comanda.id)} 
+                      className="w-12 bg-red-50 text-red-500 py-3 rounded-xl font-bold hover:bg-red-500 hover:text-white transition-colors flex items-center justify-center text-lg" 
+                      title="Excluir Definitivamente"
+                    >
+                      🗑️
+                    </button>
                   </div>
                 </div>
-                
-                <div className="flex gap-3 mt-8">
-                  <button 
-                    onClick={() => abrirComanda(comanda.id)} 
-                    className="flex-1 bg-slate-900 text-amber-500 py-3.5 rounded-xl font-black uppercase tracking-wider hover:bg-slate-800 transition-colors shadow-md text-sm"
-                  >
-                    Abrir Mesa
-                  </button>
-                  <button 
-                    onClick={() => deletarComanda(comanda.id)} 
-                    className="px-4 bg-red-50 text-red-500 py-3.5 rounded-xl font-bold hover:bg-red-100 transition-colors" 
-                  >
-                    🗑️
-                  </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* ========================================= */}
+        {/* SESSÃO 2: COMANDAS FECHADAS               */}
+        {/* ========================================= */}
+        <div className="pb-12">
+          <h2 className="text-xl font-black text-slate-400 mb-6 uppercase tracking-widest flex items-center gap-3 border-t border-slate-200 pt-10">
+            <span className="w-3.5 h-3.5 rounded-full bg-slate-300"></span>
+            Histórico de Fechadas
+          </h2>
+          
+          {comandasFiltradas.filter(c => c.status === 'fechada').length === 0 ? (
+             <p className="text-slate-400 text-sm font-medium">Nenhuma mesa foi encerrada ainda.</p>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+              {comandasFiltradas.filter(c => c.status === 'fechada').map(comanda => (
+                <div key={comanda.id} className="bg-slate-100 p-5 rounded-3xl border border-slate-200 flex flex-col justify-between opacity-80 hover:opacity-100 transition-opacity min-h-[300px]">
+                  
+                  <div className="flex flex-col h-full">
+                    <div className="mb-2 shrink-0">
+                      <h3 className="font-black text-xl text-slate-500 line-through decoration-slate-400 truncate">{comanda.nome}</h3>
+                      <p className="text-slate-400 font-bold text-xs mt-1 uppercase tracking-widest">
+                        Conta Encerrada • {comanda.itens_comanda?.length || 0} itens
+                      </p>
+                    </div>
+
+                    {/* MINI LISTA DE ITENS NAS FECHADAS */}
+                    <div className="flex-grow my-3 bg-white/60 rounded-xl p-3 overflow-y-auto h-24 border border-slate-200 scrollbar-thin scrollbar-thumb-slate-300">
+                      <div className="space-y-2">
+                        {comanda.itens_comanda?.map((item: any, idx: number) => (
+                          <div key={idx} className="flex justify-between items-center text-xs border-b border-dashed border-slate-200 pb-1.5 last:border-0 last:pb-0 opacity-70">
+                            <span className="text-slate-500 font-medium truncate pr-2 line-through">{item.produtos?.nome}</span>
+                            <span className="text-slate-600 font-bold whitespace-nowrap">R$ {Number(item.produtos?.preco || 0).toFixed(2)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="mt-2 shrink-0">
+                      <p className="text-2xl font-black text-slate-600 tracking-tighter">
+                        <span className="text-sm text-slate-400 font-medium mr-1">R$</span>
+                        {calcularTotal(comanda.itens_comanda).toFixed(2)}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-2 mt-4 shrink-0">
+                    <button 
+                      onClick={() => reabrirComandaBanco(comanda.id)} 
+                      className="flex-1 bg-white border border-slate-300 text-slate-600 hover:bg-slate-200 font-bold py-2.5 rounded-xl transition-colors text-sm" 
+                    >
+                      ↩️ Reabrir
+                    </button>
+                    <button 
+                      onClick={() => deletarComanda(comanda.id)} 
+                      className="w-12 bg-white border border-red-100 text-red-500 hover:bg-red-500 hover:border-red-500 hover:text-white flex items-center justify-center rounded-xl transition-colors text-lg" 
+                    >
+                      🗑️
+                    </button>
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
-        )}
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     );
   }
@@ -466,36 +575,38 @@ export default function PDV() {
       </div>
 
       {/* LADO DIREITO: O CUPOM E CAIXA */}
-      <div className="hidden lg:flex lg:w-1/3 bg-slate-100 border-l border-slate-200 flex-col shadow-2xl z-10 print:flex print:w-full print:border-none print:shadow-none print:bg-white h-full relative">
+      <div className="hidden lg:flex lg:w-1/3 bg-slate-100 border-l border-slate-200 flex-col shadow-2xl z-10 print:block print:w-full print:border-none print:shadow-none print:bg-white print:h-auto print:p-0 print:m-0 relative">
         
         <div className="absolute inset-0 bg-slate-800 print:hidden h-40"></div>
 
-        <div className="flex-grow w-full max-w-[340px] mx-auto mt-6 mb-4 bg-white rounded-t-sm shadow-xl p-6 print:max-w-[80mm] print:m-0 print:p-0 font-mono text-sm text-black overflow-y-auto print:overflow-visible z-10 print:shadow-none">
+        <div className="flex-grow w-full max-w-[340px] mx-auto mt-6 mb-4 bg-white rounded-t-sm shadow-xl p-6 print:max-w-[80mm] print:m-0 print:p-0 print:mt-0 print:pt-0 font-mono text-sm text-black overflow-y-auto print:overflow-visible z-10 print:shadow-none">
           
-          <div className="text-center mb-6 border-b-2 border-dashed border-slate-300 pb-4 print:mt-0">
-            <h2 className="text-2xl font-bold uppercase tracking-widest">Itatiaia 304</h2>
-            <p className="text-xs text-slate-500 mt-1">Bar & Gastronomia</p>
+          {/* CABEÇALHO DA NOTINHA */}
+          <div className="text-center mb-6 border-b-2 border-dashed border-slate-300 print:border-black pb-4 print:mt-0">
+            <h2 className="text-2xl font-bold uppercase tracking-widest print:text-black print:font-black">Itatiaia 304</h2>
+            <p className="text-xs text-slate-500 print:text-black print:font-bold mt-1">Bar & Gastronomia</p>
           </div>
           
-          <div className="mb-6 text-sm font-bold bg-slate-50 p-2 rounded print:bg-transparent print:p-0">
-            <p className="uppercase">MESA: {comandaAtual?.nome}</p>
+          <div className="mb-6 text-sm font-bold bg-slate-50 p-2 rounded print:bg-transparent print:p-0 print:text-black print:font-black text-center">
+            <p className="uppercase text-lg">MESA: {comandaAtual?.nome}</p>
           </div>
 
+          {/* TABELA DE PRODUTOS */}
           <table className="w-full text-left mb-6 text-xs">
             <thead>
-              <tr className="border-b-2 border-dashed border-slate-300 text-slate-500">
-                <th className="pb-2 font-semibold">QTD</th>
-                <th className="pb-2 font-semibold">ITEM</th>
-                <th className="text-right pb-2 font-semibold">R$</th>
+              <tr className="border-b-2 border-dashed border-slate-300 print:border-black text-slate-500 print:text-black print:font-bold">
+                <th className="pb-2 font-semibold print:font-black">QTD</th>
+                <th className="pb-2 font-semibold print:font-black">ITEM</th>
+                <th className="text-right pb-2 font-semibold print:font-black">R$</th>
                 <th className="text-right pb-2 print:hidden"></th>
               </tr>
             </thead>
             <tbody className="align-top">
               {itensCupomAgrupados?.map((item: any) => (
-                <tr key={item.produto_id} className="border-b border-slate-100 print:border-b-0 print:border-dashed group">
-                  <td className="py-2 pr-2 text-slate-500 font-bold">{item.quantidade}x</td>
-                  <td className="py-2 pr-2 font-medium">{item.nome}</td>
-                  <td className="py-2 text-right font-medium">{item.valor_total.toFixed(2)}</td>
+                <tr key={item.produto_id} className="border-b border-slate-100 print:border-dashed print:border-b-2 print:border-black group print:text-black print:font-bold">
+                  <td className="py-2 pr-2 text-slate-500 print:text-black print:font-black">{item.quantidade}x</td>
+                  <td className="py-2 pr-2 font-medium print:font-bold">{item.nome}</td>
+                  <td className="py-2 text-right font-medium print:font-black">{item.valor_total.toFixed(2)}</td>
                   <td className="py-2 text-right print:hidden opacity-0 group-hover:opacity-100 transition-opacity">
                     <button 
                       onClick={() => removerItem(item.ids_banco[item.ids_banco.length - 1])} 
@@ -510,24 +621,45 @@ export default function PDV() {
             </tbody>
           </table>
 
-          <div className="border-t-2 border-dashed border-slate-300 pt-4 text-right">
-            <p className="text-xs text-slate-500 mb-1 uppercase">Total a pagar</p>
-            <h3 className="text-2xl font-black tracking-tighter">
+          {/* TOTAL */}
+          <div className="border-t-2 border-dashed border-slate-300 print:border-black pt-4 text-right">
+            <p className="text-xs text-slate-500 print:text-black print:font-bold mb-1 uppercase">Total a pagar</p>
+            <h3 className="text-2xl font-black tracking-tighter print:text-black print:font-black">
               R$ {comandaAtual ? calcularTotal(comandaAtual.itens_comanda).toFixed(2) : "0.00"}
             </h3>
           </div>
 
-          <div className="border-t border-dashed border-slate-300 pt-3 mt-4 text-xs">
-            <p className="text-slate-500">Forma de Pagamento:</p>
-            <p className="font-bold uppercase text-sm mt-1">{formaPagamento}</p>
+          <div className="border-t-2 border-dashed border-slate-300 print:border-black pt-3 mt-4 text-xs">
+            <p className="text-slate-500 print:text-black print:font-bold">Forma de Pagamento:</p>
+            <p className="font-bold uppercase text-sm mt-1 print:text-black print:font-black">{formaPagamento}</p>
           </div>
+
+          {/* MÁGICA DO QR CODE PIX */}
+          {formaPagamento === 'Pix' && (
+            <div className="mt-4 mb-2 flex flex-col items-center border-t-2 border-b-2 border-dashed border-slate-300 print:border-black py-4">
+              <p className="text-xs font-bold text-slate-800 print:text-black print:font-black uppercase tracking-widest mb-2">Pague com PIX</p>
+              
+              <img src="/pix.png" alt="QR Code PIX" className="w-32 h-32 object-contain print:block grayscale print:contrast-125" />
+              
+              <p className="text-[11px] mt-2 text-slate-500 print:text-black print:font-bold text-center">
+                Chave: (31) 99650-5970 <br/>
+                <span className="font-normal print:font-bold text-slate-400 print:text-black">Itatiaia 304 Bar & Gastronomia</span>
+              </p>
+            </div>
+          )}
           
-          <div className="text-center mt-8 text-xs border-t-2 border-dashed border-slate-300 pt-6 pb-4 print:pb-0 text-slate-500">
-            <p className="font-bold text-black mb-1">Obrigado pela preferência!</p>
-            <p>Volte sempre.</p>
+          {/* RODAPÉ */}
+          <div className="text-center mt-6 text-xs border-t-2 border-dashed border-slate-300 print:border-black pt-6 pb-4 print:pb-0 text-slate-500 print:text-black print:font-bold flex flex-col items-center justify-center">
+            <p className="font-bold text-black print:font-black mb-1">Obrigado pela preferência!</p>
+            <p className="mb-4">Volte sempre.</p>
+            
+            <p className="text-[10px] bg-slate-100 print:bg-transparent print:text-black print:font-bold inline-block px-3 py-1 rounded-full border border-slate-200 print:border-none print:px-0">
+              Emitido em: {new Date().toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}
+            </p>
           </div>
         </div>
 
+        {/* BOTÕES DE PAGAMENTO (Não saem na impressão) */}
         <div className="bg-white border-t border-slate-200 p-6 z-10 print:hidden shadow-[0_-10px_30px_rgba(0,0,0,0.05)]">
           <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Selecione o Pagamento</p>
           <div className="grid grid-cols-3 gap-2 mb-6">
