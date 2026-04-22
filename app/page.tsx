@@ -582,9 +582,7 @@ export default function PDV() {
       </div>
 
       {/* LADO DIREITO: O CUPOM E CAIXA */}
-      <div className="hidden lg:flex lg:w-1/3 bg-slate-100 border-l border-slate-200 flex-col shadow-2xl z-10 print:block print:w-full print:absolute print:top-0 print:left-0 print:border-none print:shadow-none print:bg-white print:h-auto print:p-0 print:m-0">
-        
-        <div className="absolute inset-0 bg-slate-800 print:hidden h-40"></div>
+      <div className="hidden lg:flex lg:w-1/3 bg-slate-100 border-l border-slate-200 flex-col shadow-2xl z-10 relative print:block print:w-full print:absolute print:top-0 print:left-0 print:border-none print:shadow-none print:bg-white print:h-auto print:p-0 print:m-0">
 
         <div className="flex-grow w-full max-w-[340px] mx-auto mt-6 mb-4 bg-white rounded-t-sm shadow-xl p-6 print:max-w-[80mm] print:m-0 print:p-0 print:mt-0 print:pt-0 font-mono text-sm text-black overflow-y-auto print:overflow-visible z-10 print:shadow-none">
           
