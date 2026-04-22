@@ -418,6 +418,13 @@ export default function PDV() {
 
   return (
     <div className="flex h-screen bg-slate-50 font-sans text-slate-800 print:bg-white print:h-auto print:block">
+
+      <style>{`
+        @media print {
+          @page { margin: 0; }
+          body, html { margin: 0 !important; padding: 0 !important; }
+        }
+      `}</style>
       
       {/* LADO ESQUERDO: PAINEL DE CARDÁPIO */}
       <div className="w-full lg:w-2/3 p-4 lg:p-8 flex flex-col h-full overflow-hidden print:hidden">
@@ -575,7 +582,7 @@ export default function PDV() {
       </div>
 
       {/* LADO DIREITO: O CUPOM E CAIXA */}
-      <div className="hidden lg:flex lg:w-1/3 bg-slate-100 border-l border-slate-200 flex-col shadow-2xl z-10 print:block print:w-full print:border-none print:shadow-none print:bg-white print:h-auto print:p-0 print:m-0 relative">
+      <div className="hidden lg:flex lg:w-1/3 bg-slate-100 border-l border-slate-200 flex-col shadow-2xl z-10 print:block print:w-full print:absolute print:top-0 print:left-0 print:border-none print:shadow-none print:bg-white print:h-auto print:p-0 print:m-0">
         
         <div className="absolute inset-0 bg-slate-800 print:hidden h-40"></div>
 
