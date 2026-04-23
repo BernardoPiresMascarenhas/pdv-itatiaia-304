@@ -4,12 +4,13 @@ import { supabase } from "@/lib/supabase";
 
 export default function PDV() {
 
-  const [isAutenticado, setIsAutenticado] = useState(false);
-  const [senhaInput, setSenhaInput] = useState("");
+
+  const [perfilUsuario, setPerfilUsuario] = useState<'admin' | 'garcom' | null>(null); 
+  const [senhaDigitada, setSenhaDigitada] = useState("");
   const [erroLogin, setErroLogin] = useState("");
 
 
-  const [carrinhoMobileAberto, setCarrinhoMobileAberto] = useState(false); // <-- ADICIONE ESTA LINHA AQUI
+  const [carrinhoMobileAberto, setCarrinhoMobileAberto] = useState(false);
 
 
   const [produtos, setProdutos] = useState<any[]>([]);
@@ -22,10 +23,10 @@ export default function PDV() {
   const [categoriaSelecionada, setCategoriaSelecionada] = useState<string>("Todas");
 
   useEffect(() => {
-    if (isAutenticado) {
+    if (perfilUsuario !== null) {
       carregarDados();
     }
-  }, [isAutenticado]);
+  }, [perfilUsuario]); 
 
   const carregarDados = async () => {
     setCarregando(true);
@@ -41,19 +42,47 @@ export default function PDV() {
     setCarregando(false);
   };
 
-
-  const fazerLogin = (e: React.FormEvent) => {
+const fazerLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    const senhaCorreta = process.env.NEXT_PUBLIC_SENHA_SISTEMA;
 
-    if (senhaInput === senhaCorreta) {
-      setIsAutenticado(true);
-      setErroLogin("");
-    } else {
-      setErroLogin("Senha incorreta. Tente novamente.");
-      setSenhaInput(""); // Limpa o campo
+    const senhaAdmin = process.env.NEXT_PUBLIC_SENHA_ADMIN;
+    const senhaGarcom = process.env.NEXT_PUBLIC_SENHA_GARCOM;
+  
+
+    if (senhaDigitada === senhaAdmin) {
+      setPerfilUsuario('admin');
+      setSenhaDigitada('');
+      setErroLogin('');
+    } 
+    else if (senhaDigitada === senhaGarcom) {
+      setPerfilUsuario('garcom');
+      setSenhaDigitada('');
+      setErroLogin('');
+    } 
+    else {
+      setErroLogin('Senha incorreta! Tente novamente.');
     }
   };
+
+  if (perfilUsuario === null) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-900">
+        <form onSubmit={fazerLogin} className="bg-white p-8 rounded-2xl shadow-xl w-96 text-center">
+          <h1 className="text-2xl font-black text-slate-800 mb-6">🔒 Acesso Itatiaia 304</h1>
+          <input 
+            type="password" 
+            placeholder="Digite sua senha..."
+            value={senhaDigitada}
+            onChange={(e) => setSenhaDigitada(e.target.value)}
+            className="w-full bg-slate-50 border-2 border-slate-200 text-slate-900 placeholder-slate-500 p-4 rounded-xl mb-4 text-center text-lg tracking-widest focus:border-amber-500 outline-none"
+          />
+          <button type="submit" className="w-full bg-amber-500 text-slate-900 font-black py-4 rounded-xl hover:bg-amber-400">
+            ENTRAR
+          </button>
+        </form>
+      </div>
+    );
+  }
 
 
   const criarComanda = async () => {
@@ -66,7 +95,6 @@ export default function PDV() {
       .select()
       .single();
 
-    // Se der erro, joga na tela!
     if (error) {
       console.error("Erro ao criar mesa:", error);
       alert("Erro ao criar mesa no banco: " + error.message);
@@ -84,12 +112,12 @@ export default function PDV() {
 
   const fecharComandaBanco = async (id: number) => {
     const { error } = await supabase.from('comandas').update({ status: 'fechada' }).eq('id', id);
-    if (!error) carregarDados(); // Recarrega a lista
+    if (!error) carregarDados(); 
   };
 
   const reabrirComandaBanco = async (id: number) => {
     const { error } = await supabase.from('comandas').update({ status: 'aberta' }).eq('id', id);
-    if (!error) carregarDados(); // Recarrega a lista
+    if (!error) carregarDados(); 
   };
 
   const adicionarProduto = async (produto: any) => {
@@ -127,7 +155,7 @@ export default function PDV() {
     setFormaPagamento("Pendente");
     setCategoriaSelecionada("Todas");
     setBuscaProduto("");
-    setCarrinhoMobileAberto(false); // <-- ADICIONE ESTA LINHA AQUI
+    setCarrinhoMobileAberto(false); 
   };
 
   const fecharComandaTela = () => {
@@ -175,7 +203,7 @@ export default function PDV() {
     return acc;
   }, []);
 
-  if (!isAutenticado) {
+  if (perfilUsuario === null) {
     return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4 font-sans print:hidden relative overflow-hidden">
         {/* Efeito visual de fundo */}
@@ -188,18 +216,18 @@ export default function PDV() {
               🍻
             </div>
             <h1 className="text-3xl font-black text-slate-900 tracking-tight uppercase">Itatiaia <span className="font-light">304</span></h1>
-            <p className="text-slate-500 text-sm mt-2 uppercase tracking-widest font-bold">Acesso Restrito</p>
+            <p className="text-slate-500 text-sm mt-2 uppercase tracking-widest font-bold">Acesso ao Sistema</p>
           </div>
 
           <form onSubmit={fazerLogin} className="space-y-6">
             <div>
-              <label className="block text-slate-700 text-sm font-bold mb-2">Senha do Sistema</label>
+              <label className="block text-slate-700 text-sm font-bold mb-2">Senha de Acesso</label>
               <input
                 type="password"
                 placeholder="Digite a senha..."
                 className="w-full bg-slate-50 border border-slate-200 text-slate-900 px-4 py-4 rounded-xl focus:outline-none focus:ring-4 focus:ring-amber-500/20 focus:border-amber-500 transition-all font-mono text-center text-xl tracking-widest"
-                value={senhaInput}
-                onChange={(e) => setSenhaInput(e.target.value)}
+                value={senhaDigitada}
+                onChange={(e) => setSenhaDigitada(e.target.value)}
                 autoFocus
               />
             </div>
@@ -212,13 +240,14 @@ export default function PDV() {
               type="submit"
               className="w-full bg-amber-500 hover:bg-amber-400 text-slate-900 font-black py-4 rounded-xl transition-all active:scale-95 shadow-[0_0_15px_rgba(245,158,11,0.3)] text-lg uppercase tracking-wider"
             >
-              Entrar no Caixa
+              ENTRAR
             </button>
           </form>
         </div>
       </div>
     );
   }
+
 
   if (carregando) return <div className="min-h-screen flex items-center justify-center bg-slate-50 text-2xl font-black text-slate-800 tracking-widest uppercase">Carregando Sistema... 🍻</div>;
 
@@ -237,8 +266,9 @@ export default function PDV() {
           </div>
           
           <div className="flex gap-3 w-full md:w-auto">
+            {/* O BOTÃO SAIR AGORA USA O setPerfilUsuario */}
             <button 
-              onClick={() => setIsAutenticado(false)} 
+              onClick={() => setPerfilUsuario(null)} 
               className="bg-slate-800 text-slate-300 px-6 py-4 rounded-xl font-bold hover:bg-slate-700 transition-colors"
             >
               🔒 Sair
@@ -327,20 +357,28 @@ export default function PDV() {
                     >
                       Abrir Mesa
                     </button>
-                    <button 
-                      onClick={() => fecharComandaBanco(comanda.id)} 
-                      className="w-12 bg-slate-100 text-slate-600 py-3 rounded-xl font-bold hover:bg-slate-200 transition-colors flex items-center justify-center text-lg" 
-                      title="Encerrar Conta"
-                    >
-                      🔒
-                    </button>
-                    <button 
-                      onClick={() => deletarComanda(comanda.id)} 
-                      className="w-12 bg-red-50 text-red-500 py-3 rounded-xl font-bold hover:bg-red-500 hover:text-white transition-colors flex items-center justify-center text-lg" 
-                      title="Excluir Definitivamente"
-                    >
-                      🗑️
-                    </button>
+                    
+                    {/* AQUI COMEÇA A TRAVA DO ADMIN */}
+                    {perfilUsuario === 'admin' && (
+                      <>
+                        <button 
+                          onClick={() => fecharComandaBanco(comanda.id)} 
+                          className="w-12 bg-slate-100 text-slate-600 py-3 rounded-xl font-bold hover:bg-slate-200 transition-colors flex items-center justify-center text-lg" 
+                          title="Encerrar Conta"
+                        >
+                          🔒
+                        </button>
+                        <button 
+                          onClick={() => deletarComanda(comanda.id)} 
+                          className="w-12 bg-red-50 text-red-500 py-3 rounded-xl font-bold hover:bg-red-500 hover:text-white transition-colors flex items-center justify-center text-lg" 
+                          title="Excluir Definitivamente"
+                        >
+                          🗑️
+                        </button>
+                      </>
+                    )}
+                    {/* AQUI TERMINA A TRAVA DO ADMIN */}
+
                   </div>
                 </div>
               ))}
@@ -393,19 +431,30 @@ export default function PDV() {
                   </div>
 
                   <div className="flex gap-2 mt-4 shrink-0">
-                    <button 
-                      onClick={() => reabrirComandaBanco(comanda.id)} 
-                      className="flex-1 bg-white border border-slate-300 text-slate-600 hover:bg-slate-200 font-bold py-2.5 rounded-xl transition-colors text-sm" 
-                    >
-                      ↩️ Reabrir
-                    </button>
-                    <button 
-                      onClick={() => deletarComanda(comanda.id)} 
-                      className="w-12 bg-white border border-red-100 text-red-500 hover:bg-red-500 hover:border-red-500 hover:text-white flex items-center justify-center rounded-xl transition-colors text-lg" 
-                    >
-                      🗑️
-                    </button>
+                    {/* AQUI COMEÇA A TRAVA DO ADMIN NAS FECHADAS */}
+                    {perfilUsuario === 'admin' ? (
+                      <>
+                        <button 
+                          onClick={() => reabrirComandaBanco(comanda.id)} 
+                          className="flex-1 bg-white border border-slate-300 text-slate-600 hover:bg-slate-200 font-bold py-2.5 rounded-xl transition-colors text-sm" 
+                        >
+                          ↩️ Reabrir
+                        </button>
+                        <button 
+                          onClick={() => deletarComanda(comanda.id)} 
+                          className="w-12 bg-white border border-red-100 text-red-500 hover:bg-red-500 hover:border-red-500 hover:text-white flex items-center justify-center rounded-xl transition-colors text-lg" 
+                        >
+                          🗑️
+                        </button>
+                      </>
+                    ) : (
+                      <p className="text-xs text-slate-400 font-bold text-center w-full mt-2 uppercase tracking-widest">
+                        Acesso Restrito
+                      </p>
+                    )}
+                    {/* AQUI TERMINA A TRAVA */}
                   </div>
+
                 </div>
               ))}
             </div>
@@ -559,12 +608,17 @@ export default function PDV() {
                       <p className="text-emerald-600 font-black text-sm mt-0.5">R$ {item.valor_total.toFixed(2)}</p>
                     </div>
                   </div>
-                  <button
-                    onClick={() => removerItem(item.ids_banco[item.ids_banco.length - 1])}
-                    className="w-12 h-12 shrink-0 flex items-center justify-center bg-red-50 text-red-500 rounded-xl font-bold hover:bg-red-500 hover:text-white transition-colors active:scale-90 ml-2"
-                  >
-                    🗑️
-                  </button>
+                  
+                  {/* TRAVA DO ADMIN APLICADA AQUI NO BOTÃO DE LIXEIRA */}
+                  {perfilUsuario === 'admin' && (
+                    <button
+                      onClick={() => removerItem(item.ids_banco[item.ids_banco.length - 1])}
+                      className="w-12 h-12 shrink-0 flex items-center justify-center bg-red-50 text-red-500 rounded-xl font-bold hover:bg-red-500 hover:text-white transition-colors active:scale-90 ml-2"
+                    >
+                      🗑️
+                    </button>
+                  )}
+                  
                 </div>
               ))}
 
@@ -615,13 +669,18 @@ export default function PDV() {
                   <td className="py-2 pr-2 font-medium print:font-bold">{item.nome}</td>
                   <td className="py-2 text-right font-medium print:font-black">{item.valor_total.toFixed(2)}</td>
                   <td className="py-2 text-right print:hidden opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button 
-                      onClick={() => removerItem(item.ids_banco[item.ids_banco.length - 1])} 
-                      className="text-red-500 ml-2 bg-red-50 w-6 h-6 rounded flex items-center justify-center font-bold hover:bg-red-500 hover:text-white transition-colors"
-                      title="Remover 1 unidade"
-                    >
-                      X
-                    </button>
+                    
+                    {/* TRAVA DO ADMIN APLICADA NO BOTÃO 'X' */}
+                    {perfilUsuario === 'admin' && (
+                      <button 
+                        onClick={() => removerItem(item.ids_banco[item.ids_banco.length - 1])} 
+                        className="text-red-500 ml-2 bg-red-50 w-6 h-6 rounded flex items-center justify-center font-bold hover:bg-red-500 hover:text-white transition-colors"
+                        title="Remover 1 unidade"
+                      >
+                        X
+                      </button>
+                    )}
+                    
                   </td>
                 </tr>
               ))}
@@ -649,7 +708,7 @@ export default function PDV() {
               <img src="/pix.png" alt="QR Code PIX" className="w-32 h-32 object-contain print:block grayscale print:contrast-125" />
               
               <p className="text-[11px] mt-2 text-slate-500 print:text-black print:font-bold text-center">
-                Chave: (31) 99999-9999 <br/>
+                Chave: (31) 99650-5970 <br/>
                 <span className="font-normal print:font-bold text-slate-400 print:text-black">Itatiaia 304 Bar & Gastronomia</span>
               </p>
             </div>
