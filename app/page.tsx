@@ -20,7 +20,84 @@ export default function PDV() {
   const [buscaProduto, setBuscaProduto] = useState("");
   const [formaPagamento, setFormaPagamento] = useState<string>("Pendente");
   const [carregando, setCarregando] = useState(true);
-  const [categoriaSelecionada, setCategoriaSelecionada] = useState<string>("Todas");
+  const [categoriaSelecionada, setCategoriaSelecionada] = useState<string>("Todas");// Estado para a impressão da cozinha
+  const [fichaCozinha, setFichaCozinha] = useState<{mesa: string, item: string, qtd: number, hora: string} | null>(null);
+  // Fila de pedidos que o garçom mandou e a cozinha ainda não imprimiu
+  const [pedidosPendentes, setPedidosPendentes] = useState<any[]>([]);
+
+  useEffect(() => {
+    // Se não for o dono, nem tenta escutar o banco
+    if (perfilUsuario !== 'admin') return;
+
+    const canalCozinha = supabase
+      .channel('novos-pedidos-cozinha')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'itens_comanda' },
+        async (payload) => {
+          const novoItem = payload.new;
+
+          // Busca o nome do produto e da comanda para montar a ficha
+          const { data: comanda } = await supabase.from('comandas').select('nome').eq('id', novoItem.comanda_id).single();
+          const { data: produto } = await supabase.from('produtos').select('nome').eq('id', novoItem.produto_id).single();
+
+          const pedidoCompleto = {
+            id: novoItem.id, // ID do item_comanda
+            mesa: comanda?.nome || 'MESA ?',
+            item: produto?.nome || 'ITEM ?',
+            qtd: novoItem.quantidade || 1
+          };
+
+          // Toca um bipe sonoro (opcional, mas legal para o caixa ouvir)
+          const audio = new Audio('https://www.soundjay.com/buttons/beep-07.wav');
+          audio.play().catch(() => {}); // catch para evitar erro se o navegador bloquear autoplay
+
+          // Adiciona na fila de pendentes na tela do dono
+          setPedidosPendentes((prev) => [...prev, pedidoCompleto]);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(canalCozinha);
+    };
+  }, [perfilUsuario]);
+
+  // Fica escutando a tabela de Comandas (Mesas) em tempo real
+  useEffect(() => {
+    if (!perfilUsuario) return;
+
+    const canalMesas = supabase
+      .channel('mudancas-mesas')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'comandas' },
+        () => {
+          // Quando o garçom criar uma mesa, o banco avisa o sistema do dono
+          // e esta função abaixo atualiza a tela automaticamente
+          carregarDados(); 
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(canalMesas);
+    };
+  }, [perfilUsuario]);
+
+  const imprimirFichaCozinha = (nomeMesa: string, nomeItem: string, quantidade: number) => {
+    // Pega a hora exata do pedido
+    const horaAtual = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    
+    setFichaCozinha({ mesa: nomeMesa, item: nomeItem, qtd: quantidade, hora: horaAtual });
+
+    // Dá 100 milissegundos pro React "desenhar" a ficha escondida antes de imprimir
+    setTimeout(() => {
+      window.print();
+      // Limpa a ficha depois de mandar pra impressora (opcional)
+      setFichaCozinha(null);
+    }, 100);
+  };
 
   useEffect(() => {
     if (perfilUsuario !== null) {
@@ -44,25 +121,31 @@ export default function PDV() {
 
 const fazerLogin = (e: React.FormEvent) => {
     e.preventDefault();
-
     const senhaAdmin = process.env.NEXT_PUBLIC_SENHA_ADMIN;
     const senhaGarcom = process.env.NEXT_PUBLIC_SENHA_GARCOM;
-  
-
+    
     if (senhaDigitada === senhaAdmin) {
       setPerfilUsuario('admin');
+      localStorage.setItem('perfilItatiaia', 'admin'); // <-- SALVA AQUI
       setSenhaDigitada('');
       setErroLogin('');
-    } 
-    else if (senhaDigitada === senhaGarcom) {
+    } else if (senhaDigitada === senhaGarcom) {
       setPerfilUsuario('garcom');
+      localStorage.setItem('perfilItatiaia', 'garcom'); // <-- SALVA AQUI
       setSenhaDigitada('');
       setErroLogin('');
-    } 
-    else {
+    } else {
       setErroLogin('Senha incorreta! Tente novamente.');
     }
   };
+
+  // Checa se o usuário já fez login antes
+  useEffect(() => {
+    const perfilSalvo = localStorage.getItem('perfilItatiaia');
+    if (perfilSalvo === 'admin' || perfilSalvo === 'garcom') {
+      setPerfilUsuario(perfilSalvo);
+    }
+  }, []);
 
   if (perfilUsuario === null) {
     return (
@@ -253,214 +336,304 @@ const fazerLogin = (e: React.FormEvent) => {
 
   if (comandaAbertaId === null) {
     return (
-      <div className="min-h-screen bg-slate-50 p-8 print:hidden font-sans">
-        <header className="bg-slate-900 text-white p-6 md:p-8 rounded-3xl mb-8 shadow-2xl flex flex-col md:flex-row justify-between items-center gap-4 border-b-4 border-amber-500">
-          <div className="flex items-center gap-4">
-            <div className="bg-amber-500 p-3 rounded-full text-2xl">🍻</div>
-            <div>
-              <h1 className="text-3xl md:text-4xl font-black tracking-wider text-amber-500 leading-none">
-                ITATIAIA <span className="text-white font-light">304</span>
+      // O Fragmento <> engloba tudo, separando a Ficha do Site Principal
+      <>
+        {/* ========================================= */}
+        {/* FICHINHA DA COZINHA (SÓ APARECE NO PAPEL) */}
+        {/* ========================================= */}
+        {fichaCozinha && (
+          <div className="hidden print:flex flex-col w-[80mm] text-black font-mono bg-white absolute top-0 left-0 z-50">
+            {/* Cabeçalho da Ficha */}
+            <div className="text-center border-b-[3px] border-black pb-2 mb-4 mt-2">
+              <h2 className="text-2xl font-black uppercase tracking-widest">COZINHA</h2>
+              <p className="text-sm font-bold">ITATIAIA 304</p>
+            </div>
+
+            {/* Nome da Mesa bem grande */}
+            <div className="text-center mb-6">
+              <h1 className="text-5xl font-black uppercase border-y-2 border-dashed border-black py-2">
+                {fichaCozinha.mesa}
               </h1>
-              <p className="text-slate-400 text-sm tracking-widest uppercase mt-1">Painel de Comandas</p>
             </div>
-          </div>
-          
-          <div className="flex gap-3 w-full md:w-auto">
-            {/* O BOTÃO SAIR AGORA USA O setPerfilUsuario */}
-            <button 
-              onClick={() => setPerfilUsuario(null)} 
-              className="bg-slate-800 text-slate-300 px-6 py-4 rounded-xl font-bold hover:bg-slate-700 transition-colors"
-            >
-              🔒 Sair
-            </button>
-            <button 
-              onClick={criarComanda} 
-              className="flex-1 md:flex-none bg-amber-500 text-slate-900 px-8 py-4 rounded-xl font-black text-lg hover:bg-amber-400 transition-transform active:scale-95 shadow-[0_0_15px_rgba(245,158,11,0.3)]"
-            >
-              + NOVA MESA
-            </button>
-          </div>
-        </header>
 
-        {/* BARRA DE PESQUISA */}
-        <div className="mb-12 relative max-w-xl mx-auto md:mx-0">
-          <span className="absolute left-4 top-4 text-slate-400 text-xl">🔍</span>
-          <input
-            type="text"
-            placeholder="Buscar por mesa ou cliente..."
-            className="w-full bg-white border border-slate-200 text-slate-800 placeholder-slate-400 pl-12 pr-4 py-4 rounded-2xl shadow-sm focus:ring-4 focus:ring-amber-500/20 focus:border-amber-500 outline-none transition-all text-lg font-medium"
-            value={buscaComanda}
-            onChange={(e) => setBuscaComanda(e.target.value)}
-          />
-        </div>
+            {/* O Item e a Quantidade */}
+            <div className="flex items-start gap-4 mb-6">
+              <span className="text-4xl font-black">{fichaCozinha.qtd}X</span>
+              <p className="text-3xl font-bold uppercase leading-tight mt-1">{fichaCozinha.item}</p>
+            </div>
+
+            {/* Rodapé com a Hora */}
+            <div className="border-t-2 border-black pt-2 flex justify-between text-sm font-bold mt-4 mb-10">
+              <span>DATA: {new Date().toLocaleDateString('pt-BR')}</span>
+              <span>HORA: {fichaCozinha.hora}</span>
+            </div>
+            
+            {/* Espaço em branco pro rolo da impressora térmica cortar certinho */}
+            <div className="h-10 text-white">.</div>
+          </div>
+        )}
 
         {/* ========================================= */}
-        {/* SESSÃO 1: COMANDAS ABERTAS                */}
+        {/* SITE PRINCIPAL (ESCONDIDO NA IMPRESSÃO)   */}
         {/* ========================================= */}
-        <div className="mb-16">
-          <h2 className="text-xl font-black text-slate-700 mb-6 uppercase tracking-widest flex items-center gap-3">
-            <span className="w-3.5 h-3.5 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_10px_rgba(16,185,129,0.5)]"></span>
-            Mesas Abertas
-          </h2>
+        <div className="min-h-screen bg-slate-50 p-8 print:hidden font-sans">
           
-          {comandasFiltradas.filter(c => c.status === 'aberta').length === 0 ? (
-            <div className="text-center py-16 bg-white border border-dashed border-slate-300 rounded-3xl">
-              <p className="text-5xl mb-4">🍻</p>
-              <p className="text-slate-500 text-xl font-medium">Nenhuma mesa aberta.</p>
-              <p className="text-slate-400 text-sm mt-1">Clique em "Nova Mesa" para começar a vender!</p>
+          <header className="bg-slate-900 text-white p-6 md:p-8 rounded-3xl mb-8 shadow-2xl flex flex-col md:flex-row justify-between items-center gap-4 border-b-4 border-amber-500">
+            <div className="flex items-center gap-4">
+              <div className="bg-amber-500 p-3 rounded-full text-2xl">🍻</div>
+              <div>
+                <h1 className="text-3xl md:text-4xl font-black tracking-wider text-amber-500 leading-none">
+                  ITATIAIA <span className="text-white font-light">304</span>
+                </h1>
+                <p className="text-slate-400 text-sm tracking-widest uppercase mt-1">Painel de Comandas</p>
+              </div>
             </div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-              {comandasFiltradas.filter(c => c.status === 'aberta').map((comanda) => (
-                <div key={comanda.id} className="bg-white p-5 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] transition-all border border-slate-100 relative group flex flex-col justify-between min-h-[340px] overflow-hidden">
-                  <div className="absolute top-0 left-0 w-full h-2 bg-emerald-500"></div>
-                  
-                  <div className="flex flex-col h-full">
-                    <div className="flex justify-between items-start mb-2 mt-2 shrink-0">
-                      <h2 className="text-2xl font-black text-slate-800 uppercase tracking-tight truncate pr-2">
-                        {comanda.nome}
-                      </h2>
-                      <span className="bg-slate-100 text-slate-500 text-xs font-bold px-3 py-1.5 rounded-full flex-shrink-0">
-                        {comanda.itens_comanda?.length || 0} itens
-                      </span>
+            
+            <div className="flex gap-3 w-full md:w-auto">
+              <button 
+                onClick={() => {
+                  setPerfilUsuario(null);
+                  localStorage.removeItem('perfilItatiaia'); // <-- LIMPA AQUI AO SAIR
+                }} 
+                className="bg-slate-800 text-slate-300 px-6 py-4 rounded-xl font-bold hover:bg-slate-700 transition-colors"
+              >
+                🔒 Sair
+              </button>
+              <button 
+                onClick={criarComanda} 
+                className="flex-1 md:flex-none bg-amber-500 text-slate-900 px-8 py-4 rounded-xl font-black text-lg hover:bg-amber-400 transition-transform active:scale-95 shadow-[0_0_15px_rgba(245,158,11,0.3)]"
+              >
+                + NOVA MESA
+              </button>
+            </div>
+          </header>
+
+          {/* ========================================= */}
+          {/* ALERTAS DE NOVOS PEDIDOS (SÓ PARA ADMIN)  */}
+          {/* ========================================= */}
+          {perfilUsuario === 'admin' && pedidosPendentes.length > 0 && (
+            <div className="mb-8 p-6 bg-red-50 border-2 border-red-500 rounded-3xl shadow-lg animate-pulse-slow">
+              <h3 className="text-red-600 font-black text-xl mb-4 uppercase tracking-widest flex items-center gap-2">
+                🔔 Pedidos Aguardando Impressão ({pedidosPendentes.length})
+              </h3>
+              
+              <div className="flex flex-col gap-3">
+                {pedidosPendentes.map((pedido, index) => (
+                  <div key={index} className="bg-white p-4 rounded-xl border border-red-200 flex justify-between items-center shadow-sm">
+                    <div>
+                      <p className="font-black text-lg text-slate-800">{pedido.mesa}</p>
+                      <p className="text-slate-500 font-bold">{pedido.qtd}x {pedido.item}</p>
                     </div>
+                    
+                    {/* CONTAINER DOS BOTÕES */}
+                    <div className="flex gap-2">
+                      {/* BOTÃO DE REMOVER (IGNORAR) */}
+                      <button 
+                        onClick={() => {
+                          // Apenas remove da lista sem imprimir nada
+                          setPedidosPendentes((prev) => prev.filter((_, i) => i !== index));
+                        }}
+                        className="bg-white border-2 border-slate-200 text-slate-400 hover:bg-slate-100 hover:text-slate-600 px-4 py-3 rounded-xl font-black uppercase transition-colors shadow-sm flex items-center justify-center"
+                        title="Dispensar sem imprimir"
+                      >
+                        ❌
+                      </button>
 
-                    {/* MINI LISTA DE ITENS (ESPIADINHA) */}
-                    <div className="flex-grow my-3 bg-slate-50/70 rounded-xl p-3 overflow-y-auto h-32 border border-slate-100 scrollbar-thin scrollbar-thumb-slate-200">
-                      {comanda.itens_comanda?.length === 0 ? (
-                        <p className="text-xs text-slate-400 text-center italic mt-10">Nenhum pedido ainda</p>
-                      ) : (
+                      {/* BOTÃO DE IMPRIMIR */}
+                      <button 
+                        onClick={() => {
+                          // 1. Manda para a impressora
+                          imprimirFichaCozinha(pedido.mesa, pedido.item, pedido.qtd);
+                          
+                          // 2. Remove este item da lista de pendentes da tela
+                          setPedidosPendentes((prev) => prev.filter((_, i) => i !== index));
+                        }}
+                        className="bg-red-500 hover:bg-red-600 text-white px-6 py-3 rounded-xl font-black uppercase transition-colors shadow-md flex items-center gap-2"
+                      >
+                        🖨️ Imprimir Ficha
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* BARRA DE PESQUISA */}
+          <div className="mb-12 relative max-w-xl mx-auto md:mx-0">
+            <span className="absolute left-4 top-4 text-slate-400 text-xl">🔍</span>
+            <input
+              type="text"
+              placeholder="Buscar por mesa ou cliente..."
+              className="w-full bg-white border border-slate-200 text-slate-800 placeholder-slate-400 pl-12 pr-4 py-4 rounded-2xl shadow-sm focus:ring-4 focus:ring-amber-500/20 focus:border-amber-500 outline-none transition-all text-lg font-medium"
+              value={buscaComanda}
+              onChange={(e) => setBuscaComanda(e.target.value)}
+            />
+          </div>
+
+          {/* ========================================= */}
+          {/* SESSÃO 1: COMANDAS ABERTAS                */}
+          {/* ========================================= */}
+          <div className="mb-16">
+            <h2 className="text-xl font-black text-slate-700 mb-6 uppercase tracking-widest flex items-center gap-3">
+              <span className="w-3.5 h-3.5 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_10px_rgba(16,185,129,0.5)]"></span>
+              Mesas Abertas
+            </h2>
+            
+            {comandasFiltradas.filter(c => c.status === 'aberta').length === 0 ? (
+              <div className="text-center py-16 bg-white border border-dashed border-slate-300 rounded-3xl">
+                <p className="text-5xl mb-4">🍻</p>
+                <p className="text-slate-500 text-xl font-medium">Nenhuma mesa aberta.</p>
+                <p className="text-slate-400 text-sm mt-1">Clique em "Nova Mesa" para começar a vender!</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+                {comandasFiltradas.filter(c => c.status === 'aberta').map((comanda) => (
+                  <div key={comanda.id} className="bg-white p-5 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] transition-all border border-slate-100 relative group flex flex-col justify-between min-h-[340px] overflow-hidden">
+                    <div className="absolute top-0 left-0 w-full h-2 bg-emerald-500"></div>
+                    
+                    <div className="flex flex-col h-full">
+                      <div className="flex justify-between items-start mb-2 mt-2 shrink-0">
+                        <h2 className="text-2xl font-black text-slate-800 uppercase tracking-tight truncate pr-2">
+                          {comanda.nome}
+                        </h2>
+                        <span className="bg-slate-100 text-slate-500 text-xs font-bold px-3 py-1.5 rounded-full flex-shrink-0">
+                          {comanda.itens_comanda?.length || 0} itens
+                        </span>
+                      </div>
+
+                      {/* MINI LISTA DE ITENS (ESPIADINHA) */}
+                      <div className="flex-grow my-3 bg-slate-50/70 rounded-xl p-3 overflow-y-auto h-32 border border-slate-100 scrollbar-thin scrollbar-thumb-slate-200">
+                        {comanda.itens_comanda?.length === 0 ? (
+                          <p className="text-xs text-slate-400 text-center italic mt-10">Nenhum pedido ainda</p>
+                        ) : (
+                          <div className="space-y-2">
+                            {comanda.itens_comanda?.map((item: any, idx: number) => (
+                              <div key={idx} className="flex justify-between items-center text-xs border-b border-dashed border-slate-200 pb-1.5 last:border-0 last:pb-0">
+                                <span className="text-slate-600 font-medium truncate pr-2">{item.produtos?.nome}</span>
+                                <span className="text-emerald-600 font-black whitespace-nowrap">R$ {Number(item.produtos?.preco || 0).toFixed(2)}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      
+                      <div className="mt-2 shrink-0">
+                        <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Total da Conta</p>
+                        <p className="text-3xl font-black text-slate-900 tracking-tighter">
+                          <span className="text-lg text-slate-400 font-medium mr-1 border-r-2 border-emerald-500 pr-1">R$</span>
+                          {calcularTotal(comanda.itens_comanda).toFixed(2)}
+                        </p>
+                      </div>
+                    </div>
+                    
+                    <div className="flex gap-2 mt-5 shrink-0">
+                      <button 
+                        onClick={() => abrirComanda(comanda.id)} 
+                        className="flex-1 bg-slate-900 text-amber-500 py-3 rounded-xl font-black uppercase tracking-wider hover:bg-slate-800 transition-colors shadow-md text-xs sm:text-sm"
+                      >
+                        Abrir Mesa
+                      </button>
+                      
+                      {perfilUsuario === 'admin' && (
+                        <>
+                          <button 
+                            onClick={() => fecharComandaBanco(comanda.id)} 
+                            className="w-12 bg-slate-100 text-slate-600 py-3 rounded-xl font-bold hover:bg-slate-200 transition-colors flex items-center justify-center text-lg" 
+                            title="Encerrar Conta"
+                          >
+                            🔒
+                          </button>
+                          <button 
+                            onClick={() => deletarComanda(comanda.id)} 
+                            className="w-12 bg-red-50 text-red-500 py-3 rounded-xl font-bold hover:bg-red-500 hover:text-white transition-colors flex items-center justify-center text-lg" 
+                            title="Excluir Definitivamente"
+                          >
+                            🗑️
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* ========================================= */}
+          {/* SESSÃO 2: COMANDAS FECHADAS               */}
+          {/* ========================================= */}
+          <div className="pb-12">
+            <h2 className="text-xl font-black text-slate-400 mb-6 uppercase tracking-widest flex items-center gap-3 border-t border-slate-200 pt-10">
+              <span className="w-3.5 h-3.5 rounded-full bg-slate-300"></span>
+              Histórico de Fechadas
+            </h2>
+            
+            {comandasFiltradas.filter(c => c.status === 'fechada').length === 0 ? (
+               <p className="text-slate-400 text-sm font-medium">Nenhuma mesa foi encerrada ainda.</p>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                {comandasFiltradas.filter(c => c.status === 'fechada').map(comanda => (
+                  <div key={comanda.id} className="bg-slate-100 p-5 rounded-3xl border border-slate-200 flex flex-col justify-between opacity-80 hover:opacity-100 transition-opacity min-h-[300px]">
+                    
+                    <div className="flex flex-col h-full">
+                      <div className="mb-2 shrink-0">
+                        <h3 className="font-black text-xl text-slate-500 line-through decoration-slate-400 truncate">{comanda.nome}</h3>
+                        <p className="text-slate-400 font-bold text-xs mt-1 uppercase tracking-widest">
+                          Conta Encerrada • {comanda.itens_comanda?.length || 0} itens
+                        </p>
+                      </div>
+
+                      <div className="flex-grow my-3 bg-white/60 rounded-xl p-3 overflow-y-auto h-24 border border-slate-200 scrollbar-thin scrollbar-thumb-slate-300">
                         <div className="space-y-2">
                           {comanda.itens_comanda?.map((item: any, idx: number) => (
-                            <div key={idx} className="flex justify-between items-center text-xs border-b border-dashed border-slate-200 pb-1.5 last:border-0 last:pb-0">
-                              <span className="text-slate-600 font-medium truncate pr-2">{item.produtos?.nome}</span>
-                              <span className="text-emerald-600 font-black whitespace-nowrap">R$ {Number(item.produtos?.preco || 0).toFixed(2)}</span>
+                            <div key={idx} className="flex justify-between items-center text-xs border-b border-dashed border-slate-200 pb-1.5 last:border-0 last:pb-0 opacity-70">
+                              <span className="text-slate-500 font-medium truncate pr-2 line-through">{item.produtos?.nome}</span>
+                              <span className="text-slate-600 font-bold whitespace-nowrap">R$ {Number(item.produtos?.preco || 0).toFixed(2)}</span>
                             </div>
                           ))}
                         </div>
-                      )}
-                    </div>
-                    
-                    <div className="mt-2 shrink-0">
-                      <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Total da Conta</p>
-                      <p className="text-3xl font-black text-slate-900 tracking-tighter">
-                        <span className="text-lg text-slate-400 font-medium mr-1 border-r-2 border-emerald-500 pr-1">R$</span>
-                        {calcularTotal(comanda.itens_comanda).toFixed(2)}
-                      </p>
-                    </div>
-                  </div>
-                  
-                  <div className="flex gap-2 mt-5 shrink-0">
-                    <button 
-                      onClick={() => abrirComanda(comanda.id)} 
-                      className="flex-1 bg-slate-900 text-amber-500 py-3 rounded-xl font-black uppercase tracking-wider hover:bg-slate-800 transition-colors shadow-md text-xs sm:text-sm"
-                    >
-                      Abrir Mesa
-                    </button>
-                    
-                    {/* AQUI COMEÇA A TRAVA DO ADMIN */}
-                    {perfilUsuario === 'admin' && (
-                      <>
-                        <button 
-                          onClick={() => fecharComandaBanco(comanda.id)} 
-                          className="w-12 bg-slate-100 text-slate-600 py-3 rounded-xl font-bold hover:bg-slate-200 transition-colors flex items-center justify-center text-lg" 
-                          title="Encerrar Conta"
-                        >
-                          🔒
-                        </button>
-                        <button 
-                          onClick={() => deletarComanda(comanda.id)} 
-                          className="w-12 bg-red-50 text-red-500 py-3 rounded-xl font-bold hover:bg-red-500 hover:text-white transition-colors flex items-center justify-center text-lg" 
-                          title="Excluir Definitivamente"
-                        >
-                          🗑️
-                        </button>
-                      </>
-                    )}
-                    {/* AQUI TERMINA A TRAVA DO ADMIN */}
+                      </div>
 
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* ========================================= */}
-        {/* SESSÃO 2: COMANDAS FECHADAS               */}
-        {/* ========================================= */}
-        <div className="pb-12">
-          <h2 className="text-xl font-black text-slate-400 mb-6 uppercase tracking-widest flex items-center gap-3 border-t border-slate-200 pt-10">
-            <span className="w-3.5 h-3.5 rounded-full bg-slate-300"></span>
-            Histórico de Fechadas
-          </h2>
-          
-          {comandasFiltradas.filter(c => c.status === 'fechada').length === 0 ? (
-             <p className="text-slate-400 text-sm font-medium">Nenhuma mesa foi encerrada ainda.</p>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-              {comandasFiltradas.filter(c => c.status === 'fechada').map(comanda => (
-                <div key={comanda.id} className="bg-slate-100 p-5 rounded-3xl border border-slate-200 flex flex-col justify-between opacity-80 hover:opacity-100 transition-opacity min-h-[300px]">
-                  
-                  <div className="flex flex-col h-full">
-                    <div className="mb-2 shrink-0">
-                      <h3 className="font-black text-xl text-slate-500 line-through decoration-slate-400 truncate">{comanda.nome}</h3>
-                      <p className="text-slate-400 font-bold text-xs mt-1 uppercase tracking-widest">
-                        Conta Encerrada • {comanda.itens_comanda?.length || 0} itens
-                      </p>
-                    </div>
-
-                    {/* MINI LISTA DE ITENS NAS FECHADAS */}
-                    <div className="flex-grow my-3 bg-white/60 rounded-xl p-3 overflow-y-auto h-24 border border-slate-200 scrollbar-thin scrollbar-thumb-slate-300">
-                      <div className="space-y-2">
-                        {comanda.itens_comanda?.map((item: any, idx: number) => (
-                          <div key={idx} className="flex justify-between items-center text-xs border-b border-dashed border-slate-200 pb-1.5 last:border-0 last:pb-0 opacity-70">
-                            <span className="text-slate-500 font-medium truncate pr-2 line-through">{item.produtos?.nome}</span>
-                            <span className="text-slate-600 font-bold whitespace-nowrap">R$ {Number(item.produtos?.preco || 0).toFixed(2)}</span>
-                          </div>
-                        ))}
+                      <div className="mt-2 shrink-0">
+                        <p className="text-2xl font-black text-slate-600 tracking-tighter">
+                          <span className="text-sm text-slate-400 font-medium mr-1">R$</span>
+                          {calcularTotal(comanda.itens_comanda).toFixed(2)}
+                        </p>
                       </div>
                     </div>
 
-                    <div className="mt-2 shrink-0">
-                      <p className="text-2xl font-black text-slate-600 tracking-tighter">
-                        <span className="text-sm text-slate-400 font-medium mr-1">R$</span>
-                        {calcularTotal(comanda.itens_comanda).toFixed(2)}
-                      </p>
+                    <div className="flex gap-2 mt-4 shrink-0">
+                      {perfilUsuario === 'admin' ? (
+                        <>
+                          <button 
+                            onClick={() => reabrirComandaBanco(comanda.id)} 
+                            className="flex-1 bg-white border border-slate-300 text-slate-600 hover:bg-slate-200 font-bold py-2.5 rounded-xl transition-colors text-sm" 
+                          >
+                            ↩️ Reabrir
+                          </button>
+                          <button 
+                            onClick={() => deletarComanda(comanda.id)} 
+                            className="w-12 bg-white border border-red-100 text-red-500 hover:bg-red-500 hover:border-red-500 hover:text-white flex items-center justify-center rounded-xl transition-colors text-lg" 
+                          >
+                            🗑️
+                          </button>
+                        </>
+                      ) : (
+                        <p className="text-xs text-slate-400 font-bold text-center w-full mt-2 uppercase tracking-widest">
+                          Acesso Restrito
+                        </p>
+                      )}
                     </div>
-                  </div>
 
-                  <div className="flex gap-2 mt-4 shrink-0">
-                    {/* AQUI COMEÇA A TRAVA DO ADMIN NAS FECHADAS */}
-                    {perfilUsuario === 'admin' ? (
-                      <>
-                        <button 
-                          onClick={() => reabrirComandaBanco(comanda.id)} 
-                          className="flex-1 bg-white border border-slate-300 text-slate-600 hover:bg-slate-200 font-bold py-2.5 rounded-xl transition-colors text-sm" 
-                        >
-                          ↩️ Reabrir
-                        </button>
-                        <button 
-                          onClick={() => deletarComanda(comanda.id)} 
-                          className="w-12 bg-white border border-red-100 text-red-500 hover:bg-red-500 hover:border-red-500 hover:text-white flex items-center justify-center rounded-xl transition-colors text-lg" 
-                        >
-                          🗑️
-                        </button>
-                      </>
-                    ) : (
-                      <p className="text-xs text-slate-400 font-bold text-center w-full mt-2 uppercase tracking-widest">
-                        Acesso Restrito
-                      </p>
-                    )}
-                    {/* AQUI TERMINA A TRAVA */}
                   </div>
+                ))}
+              </div>
+            )}
+          </div>
 
-                </div>
-              ))}
-            </div>
-          )}
         </div>
-      </div>
+      </>
     );
   }
 
