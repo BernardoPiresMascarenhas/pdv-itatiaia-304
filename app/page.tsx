@@ -22,8 +22,22 @@ export default function PDV() {
   const [carregando, setCarregando] = useState(true);
   const [categoriaSelecionada, setCategoriaSelecionada] = useState<string>("Todas");// Estado para a impressão da cozinha
   const [fichaCozinha, setFichaCozinha] = useState<{mesa: string, item: string, qtd: number, hora: string} | null>(null);
-  // Fila de pedidos que o garçom mandou e a cozinha ainda não imprimiu
-  const [pedidosPendentes, setPedidosPendentes] = useState<any[]>([]);
+  // Fila de pedidos (inicia buscando do localStorage, se houver)
+  const [pedidosPendentes, setPedidosPendentes] = useState<any[]>(() => {
+    // Evita erro no Next.js durante a renderização no servidor
+    if (typeof window !== 'undefined') {
+      const pedidosSalvos = localStorage.getItem('pedidosPendentesItatiaia');
+      if (pedidosSalvos) {
+        return JSON.parse(pedidosSalvos);
+      }
+    }
+    return []; // Se não tiver nada salvo, começa vazio
+  });
+
+  // Salva os pedidos pendentes no LocalStorage sempre que a lista mudar
+  useEffect(() => {
+    localStorage.setItem('pedidosPendentesItatiaia', JSON.stringify(pedidosPendentes));
+  }, [pedidosPendentes]);
 
   useEffect(() => {
     // Se não for o dono, nem tenta escutar o banco
