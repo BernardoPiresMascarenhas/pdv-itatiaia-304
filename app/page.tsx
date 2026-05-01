@@ -2,6 +2,14 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 
+export interface Produto {
+  id: number;
+  nome: string;
+  preco: number;
+  categoria: string;
+  disponivel?: boolean;
+}
+
 export default function PDV() {
 
 
@@ -11,9 +19,10 @@ export default function PDV() {
 
 
   const [carrinhoMobileAberto, setCarrinhoMobileAberto] = useState(false);
+// Controle para exibir ou esconder o painel de estoque
+  const [mostrarEstoque, setMostrarEstoque] = useState(false);
 
-
-  const [produtos, setProdutos] = useState<any[]>([]);
+  const [produtos, setProdutos] = useState<Produto[]>([]);
   const [comandas, setComandas] = useState<any[]>([]);
   const [comandaAbertaId, setComandaAbertaId] = useState<number | null>(null);
   const [buscaComanda, setBuscaComanda] = useState("");
@@ -98,6 +107,34 @@ export default function PDV() {
       supabase.removeChannel(canalMesas);
     };
   }, [perfilUsuario]);
+
+  // Escuta mudanças no estoque (produtos) em tempo real para TODOS os usuários
+  useEffect(() => {
+    // Esse canal fica aberto para o Admin e para o Garçom
+    const canalProdutos = supabase
+      .channel('mudancas-produtos')
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'produtos' },
+        (payload) => {
+          const produtoAtualizado = payload.new as Produto;
+
+          // Atualiza a lista de produtos na tela instantaneamente, sem recarregar a página
+          setProdutos((prevProdutos) =>
+            prevProdutos.map((p) =>
+              p.id === produtoAtualizado.id 
+                ? { ...p, disponivel: produtoAtualizado.disponivel } 
+                : p
+            )
+          );
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(canalProdutos);
+    };
+  }, []);
 
   const imprimirFichaCozinha = (nomeMesa: string, nomeItem: string, quantidade: number) => {
     // Pega a hora exata do pedido
@@ -271,6 +308,7 @@ const fazerLogin = (e: React.FormEvent) => {
   const categoriasUnicas = ["Todas", ...Array.from(new Set(produtos.map(p => p.categoria || "Outros")))];
 
   const produtosFiltrados = produtos
+    .filter(p => p.disponivel !== false) // <-- Só adicionou esta linha!
     .filter(p => p.nome.toLowerCase().includes(buscaProduto.toLowerCase()))
     .filter(p => categoriaSelecionada === "Todas" || (p.categoria || "Outros") === categoriaSelecionada);
   
@@ -280,6 +318,17 @@ const fazerLogin = (e: React.FormEvent) => {
     acc[categoria].push(produto);
     return acc;
   }, {});
+
+  // NOVO CÁLCULO: Agrupa TODOS os produtos (inclusive os esgotados) por categoria para o Admin
+  const estoqueAgrupado = produtos.reduce((acc: any, produto) => {
+    const categoria = produto.categoria || "Outros";
+    if (!acc[categoria]) acc[categoria] = [];
+    acc[categoria].push(produto);
+    return acc;
+  }, {});
+
+  // Ordena as categorias em ordem alfabética para ficar mais fácil de achar
+  const categoriasEstoque = Object.keys(estoqueAgrupado).sort();
 
   const itensCupomAgrupados = comandaAtual?.itens_comanda?.reduce((acc: any[], item: any) => {
     const existente = acc.find((i: any) => i.produto_id === item.produto_id);
@@ -299,6 +348,27 @@ const fazerLogin = (e: React.FormEvent) => {
     }
     return acc;
   }, []);
+
+  const alternarDisponibilidade = async (idProduto: number, statusAtual: boolean) => {
+    const novoStatus = !statusAtual;
+    
+    // 1. Atualiza a tela instantaneamente (Visual)
+    setProdutos((prev) => 
+      prev.map((p) => p.id === idProduto ? { ...p, disponivel: novoStatus } : p)
+    );
+
+    // 2. Atualiza no banco de dados (Supabase)
+    const { error } = await supabase
+      .from('produtos')
+      .update({ disponivel: novoStatus })
+      .eq('id', idProduto);
+
+    if (error) {
+      alert('Erro ao atualizar disponibilidade. Tente novamente.');
+      // Se der erro, desfaz a alteração visual
+      carregarDados(); 
+    }
+  };
 
   if (perfilUsuario === null) {
     return (
@@ -404,6 +474,17 @@ const fazerLogin = (e: React.FormEvent) => {
             </div>
             
             <div className="flex gap-3 w-full md:w-auto">
+              <button
+                onClick={() => setMostrarEstoque(!mostrarEstoque)}
+                className={`px-4 py-2 rounded-xl font-bold text-sm flex items-center gap-2 transition-all shadow-sm ${
+                  mostrarEstoque 
+                  ? 'bg-amber-500 text-slate-900' 
+                  : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                }`}
+              >
+                ⚙️ {mostrarEstoque ? 'Fechar Estoque' : 'Estoque'}
+              </button>
+
               <button 
                 onClick={() => {
                   setPerfilUsuario(null);
@@ -472,6 +553,49 @@ const fazerLogin = (e: React.FormEvent) => {
               </div>
             </div>
           )}
+
+        {/* ========================================= */}
+        {/* CONTROLE DE ESTOQUE (SÓ PARA ADMIN)       */}
+        {/* ========================================= */}
+        {perfilUsuario === 'admin' && mostrarEstoque && (
+          <div className="mb-8 bg-white p-6 rounded-3xl shadow-sm border border-slate-200 shrink-0">
+            <h2 className="text-2xl font-black text-slate-800 mb-6 flex items-center gap-2">
+              ⚙️ Controle de Estoque
+            </h2>
+            
+            <div className="flex flex-col gap-6">
+              {categoriasEstoque.map((categoria) => (
+                <div key={categoria}>
+                  {/* TÍTULO DA CATEGORIA */}
+                  <h3 className="text-lg font-bold text-slate-700 mb-3 border-b-2 border-slate-100 pb-2 uppercase tracking-widest">
+                    {categoria}
+                  </h3>
+                  
+                  {/* GRID COM OS PRODUTOS DAQUELA CATEGORIA */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {estoqueAgrupado[categoria].map((produto: any) => (
+                      <div key={produto.id} className="flex justify-between items-center p-4 bg-slate-50 rounded-xl border border-slate-100 hover:border-slate-300 transition-colors">
+                        <div className="pr-2">
+                          <p className="font-bold text-slate-800 text-sm leading-tight">{produto.nome}</p>
+                        </div>
+                        <button
+                          onClick={() => alternarDisponibilidade(produto.id, produto.disponivel ?? true)}
+                          className={`px-4 py-2 rounded-xl font-bold text-xs uppercase tracking-widest transition-all shrink-0 shadow-sm ${
+                            produto.disponivel !== false
+                              ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'
+                              : 'bg-red-500 text-white hover:bg-red-600'
+                          }`}
+                        >
+                          {produto.disponivel !== false ? '✅ Ativo' : '❌ Esgotado'}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
           {/* BARRA DE PESQUISA */}
           <div className="mb-12 relative max-w-xl mx-auto md:mx-0">
