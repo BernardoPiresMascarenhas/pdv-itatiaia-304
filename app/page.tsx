@@ -475,7 +475,7 @@ const fazerLogin = (e: React.FormEvent) => {
             
             <div className="flex gap-3 w-full md:w-auto">
               
-              {/* 👇 BOTÃO DE ESTOQUE APARECE SÓ PARA ADMIN 👇 */}
+              
               {perfilUsuario === 'admin' && (
                 <button
                   onClick={() => setMostrarEstoque(!mostrarEstoque)}
@@ -492,7 +492,7 @@ const fazerLogin = (e: React.FormEvent) => {
               <button 
                 onClick={() => {
                   setPerfilUsuario(null);
-                  localStorage.removeItem('perfilItatiaia'); // <-- LIMPA AQUI AO SAIR
+                  localStorage.removeItem('perfilItatiaia'); 
                 }} 
                 className="bg-slate-800 text-slate-300 px-6 py-4 rounded-xl font-bold hover:bg-slate-700 transition-colors"
               >
