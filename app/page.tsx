@@ -474,16 +474,20 @@ const fazerLogin = (e: React.FormEvent) => {
             </div>
             
             <div className="flex gap-3 w-full md:w-auto">
-              <button
-                onClick={() => setMostrarEstoque(!mostrarEstoque)}
-                className={`px-4 py-2 rounded-xl font-bold text-sm flex items-center gap-2 transition-all shadow-sm ${
-                  mostrarEstoque 
-                  ? 'bg-amber-500 text-slate-900' 
-                  : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
-                }`}
-              >
-                ⚙️ {mostrarEstoque ? 'Fechar Estoque' : 'Estoque'}
-              </button>
+              
+              {/* 👇 BOTÃO DE ESTOQUE APARECE SÓ PARA ADMIN 👇 */}
+              {perfilUsuario === 'admin' && (
+                <button
+                  onClick={() => setMostrarEstoque(!mostrarEstoque)}
+                  className={`px-4 py-2 rounded-xl font-bold text-sm flex items-center gap-2 transition-all shadow-sm ${
+                    mostrarEstoque 
+                    ? 'bg-amber-500 text-slate-900' 
+                    : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                  }`}
+                >
+                  ⚙️ {mostrarEstoque ? 'Fechar Estoque' : 'Estoque'}
+                </button>
+              )}
 
               <button 
                 onClick={() => {
